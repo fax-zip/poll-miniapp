@@ -10,7 +10,7 @@
     "homeUrl": "https://poll-miniapp-five.vercel.app",
     "iconUrl": "https://poll-miniapp-five.vercel.app/icon.png",
     "splashBackgroundColor": "#ffffff",
-    "subtitle": "Create & vote on polls",
+    "subtitle": "Create and vote on polls",
     "description": "A simple polling miniapp for Farcaster"
   }
 }
