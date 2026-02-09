@@ -31,8 +31,10 @@ function getVisitorId(): string {
   return id;
 }
 
-export default function PollApp() {
-  const [view, setView] = useState<View>("list");
+const BASE_URL = "https://poll-miniapp-five.vercel.app";
+
+export default function PollApp({ initialPollId }: { initialPollId?: string } = {}) {
+  const [view, setView] = useState<View>(initialPollId ? "vote" : "list");
   const [polls, setPolls] = useState<Poll[]>([]);
   const [activePoll, setActivePoll] = useState<Poll | null>(null);
   const [title, setTitle] = useState("");
@@ -51,13 +53,11 @@ export default function PollApp() {
         const context = await sdk.context;
         if (context?.user) {
           const user = context.user;
-          // Prefer @username, fall back to displayName, then "Anonymous"
           const name = user.username
             ? `@${user.username}`
             : user.displayName || "Anonymous";
           setUserName(name);
 
-          // Use FID as the visitor ID if available (more reliable than random)
           if (user.fid) {
             const fid = String(user.fid);
             localStorage.setItem("poll-visitor-id", fid);
@@ -72,7 +72,13 @@ export default function PollApp() {
     };
 
     init();
-    loadPolls();
+
+    if (initialPollId) {
+      loadPoll(initialPollId);
+    } else {
+      loadPolls();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadPolls = async () => {
@@ -150,6 +156,20 @@ export default function PollApp() {
     }
   };
 
+  const sharePoll = async (poll: Poll) => {
+    try {
+      await sdk.actions.composeCast({
+        text: poll.title,
+        embeds: [`${BASE_URL}/poll/${poll.id}`],
+      });
+    } catch {
+      // Fallback for non-Farcaster context
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(`${BASE_URL}/poll/${poll.id}`);
+      }
+    }
+  };
+
   const addOption = () => setOptions([...options, ""]);
 
   const removeOption = (i: number) => {
@@ -168,7 +188,7 @@ export default function PollApp() {
     return (
       <div className="min-h-screen bg-white px-5 py-6">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-lg font-semibold text-black">Polls</h1>
+          <h1 className="text-lg font-semibold text-black">poll</h1>
           <button
             onClick={() => setView("create")}
             className="text-sm font-medium text-black border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 active:bg-gray-100 transition-colors"
@@ -188,7 +208,7 @@ export default function PollApp() {
               return (
                 <div
                   key={poll.id}
-                  className="w-full text-left p-3 border border-gray-100 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                  className="w-full text-left p-3 border border-gray-300 rounded-lg bg-gray-50/50 hover:bg-gray-50 active:bg-gray-100 transition-colors"
                 >
                   <button
                     onClick={() => {
@@ -254,7 +274,7 @@ export default function PollApp() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="What do you want to ask?"
-              className="w-full mt-1 p-3 border border-gray-200 rounded-lg text-sm text-black placeholder-gray-300 resize-none focus:outline-none focus:border-gray-400 transition-colors"
+              className="w-full mt-1 p-3 border border-gray-300 rounded-lg text-sm text-black placeholder-gray-300 resize-none focus:outline-none focus:border-gray-400 transition-colors"
               rows={2}
             />
           </div>
@@ -275,7 +295,7 @@ export default function PollApp() {
                       setOptions(next);
                     }}
                     placeholder={`Option ${i + 1}`}
-                    className="flex-1 p-3 border border-gray-200 rounded-lg text-sm text-black placeholder-gray-300 focus:outline-none focus:border-gray-400 transition-colors"
+                    className="flex-1 p-3 border border-gray-300 rounded-lg text-sm text-black placeholder-gray-300 focus:outline-none focus:border-gray-400 transition-colors"
                   />
                   {options.length > 2 && (
                     <button
@@ -323,14 +343,24 @@ export default function PollApp() {
         >
           &larr; Back
         </button>
-        {activePoll?.isCreator && (
-          <button
-            onClick={() => deletePoll(activePoll.id)}
-            className="text-sm text-gray-300 hover:text-red-500 transition-colors"
-          >
-            Delete
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {activePoll && (
+            <button
+              onClick={() => sharePoll(activePoll)}
+              className="text-sm text-gray-400 hover:text-black transition-colors"
+            >
+              Share
+            </button>
+          )}
+          {activePoll?.isCreator && (
+            <button
+              onClick={() => deletePoll(activePoll.id)}
+              className="text-sm text-gray-300 hover:text-red-500 transition-colors"
+            >
+              Delete
+            </button>
+          )}
+        </div>
       </div>
 
       {activePoll ? (
@@ -351,10 +381,10 @@ export default function PollApp() {
                   return (
                     <div
                       key={i}
-                      className="relative w-full text-left p-3 rounded-lg border border-gray-100 overflow-hidden"
+                      className="relative w-full text-left p-3 rounded-lg border border-gray-300 bg-gray-50/50 overflow-hidden"
                     >
                       <div
-                        className="absolute inset-0 bg-gray-50 transition-all"
+                        className="absolute inset-0 bg-gray-100 transition-all"
                         style={{ width: `${pct}%` }}
                       />
                       <div className="relative flex justify-between items-center">
@@ -384,7 +414,7 @@ export default function PollApp() {
                       className={`w-full text-left p-3 rounded-lg border transition-colors ${
                         isSelected
                           ? "border-[#018a08] bg-[#018a08]"
-                          : "border-gray-100 hover:border-gray-200"
+                          : "border-gray-300 bg-gray-50/50 hover:border-gray-400"
                       }`}
                     >
                       <div className="flex items-center gap-3">

@@ -8,7 +8,7 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Poll",
+  title: "poll",
   description: "Create and vote on polls",
   other: {
     "fc:miniapp": JSON.stringify({
