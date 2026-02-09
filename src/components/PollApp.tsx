@@ -17,6 +17,7 @@ interface Poll {
   isCreator: boolean;
   creatorName: string;
   createdAt: number;
+  expiresAt: number;
 }
 
 type View = "list" | "create" | "vote";
@@ -44,6 +45,10 @@ export default function PollApp({ initialPollId }: { initialPollId?: string } = 
   const [loading, setLoading] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [durationAmount, setDurationAmount] = useState(1);
+  const [durationUnit, setDurationUnit] = useState<"hours" | "days" | "weeks" | "months">("days");
+
+  const durationUnits: ("hours" | "days" | "weeks" | "months")[] = ["hours", "days", "weeks", "months"];
 
   useEffect(() => {
     setVisitorId(getVisitorId());
@@ -109,6 +114,8 @@ export default function PollApp({ initialPollId }: { initialPollId?: string } = 
         options: validOptions,
         creatorId: visitorId,
         creatorName: userName,
+        durationAmount,
+        durationUnit,
       }),
     });
     const poll = await res.json();
@@ -314,6 +321,63 @@ export default function PollApp({ initialPollId }: { initialPollId?: string } = 
             >
               + Add option
             </button>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+              Duration
+            </label>
+            <div className="flex gap-2 mt-1">
+              {/* Amount selector */}
+              <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setDurationAmount(Math.max(1, durationAmount - 1))}
+                  className="px-3 py-3 text-gray-400 hover:text-black hover:bg-gray-50 transition-colors text-sm"
+                >
+                  &darr;
+                </button>
+                <input
+                  type="text"
+                  value={durationAmount}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (!isNaN(val) && val >= 1) setDurationAmount(val);
+                  }}
+                  className="w-10 text-center text-sm text-black py-3 focus:outline-none"
+                />
+                <button
+                  onClick={() => setDurationAmount(durationAmount + 1)}
+                  className="px-3 py-3 text-gray-400 hover:text-black hover:bg-gray-50 transition-colors text-sm"
+                >
+                  &uarr;
+                </button>
+              </div>
+
+              {/* Unit selector */}
+              <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden flex-1">
+                <button
+                  onClick={() => {
+                    const idx = durationUnits.indexOf(durationUnit);
+                    setDurationUnit(durationUnits[(idx - 1 + durationUnits.length) % durationUnits.length]);
+                  }}
+                  className="px-3 py-3 text-gray-400 hover:text-black hover:bg-gray-50 transition-colors text-sm"
+                >
+                  &darr;
+                </button>
+                <span className="flex-1 text-center text-sm text-black py-3">
+                  {durationUnit}
+                </span>
+                <button
+                  onClick={() => {
+                    const idx = durationUnits.indexOf(durationUnit);
+                    setDurationUnit(durationUnits[(idx + 1) % durationUnits.length]);
+                  }}
+                  className="px-3 py-3 text-gray-400 hover:text-black hover:bg-gray-50 transition-colors text-sm"
+                >
+                  &uarr;
+                </button>
+              </div>
+            </div>
           </div>
 
           <button

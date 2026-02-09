@@ -8,6 +8,7 @@ export interface Poll {
   creatorId: string;
   creatorName: string;
   createdAt: number;
+  expiresAt: number;
 }
 
 const polls = new Map<string, Poll>();
@@ -21,7 +22,12 @@ function sanitize(poll: Poll) {
     creatorId: poll.creatorId,
     creatorName: poll.creatorName,
     createdAt: poll.createdAt,
+    expiresAt: poll.expiresAt,
   };
+}
+
+function isExpired(poll: Poll): boolean {
+  return Date.now() > poll.expiresAt;
 }
 
 export async function GET(req: NextRequest) {
@@ -35,6 +41,7 @@ export async function GET(req: NextRequest) {
       ...sanitize(poll),
       hasVoted: visitorId ? poll.voters.has(visitorId) : false,
       isCreator: visitorId ? poll.creatorId === visitorId : false,
+      expired: isExpired(poll),
     });
   }
 
@@ -44,23 +51,37 @@ export async function GET(req: NextRequest) {
       ...sanitize(poll),
       hasVoted: visitorId ? poll.voters.has(visitorId) : false,
       isCreator: visitorId ? poll.creatorId === visitorId : false,
+      expired: isExpired(poll),
     }));
 
   return NextResponse.json(list);
 }
 
+const UNIT_MS: Record<string, number> = {
+  hours: 60 * 60 * 1000,
+  days: 24 * 60 * 60 * 1000,
+  weeks: 7 * 24 * 60 * 60 * 1000,
+  months: 30 * 24 * 60 * 60 * 1000,
+};
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { title, options, creatorId, creatorName } = body as {
+  const { title, options, creatorId, creatorName, durationAmount, durationUnit } = body as {
     title: string;
     options: string[];
     creatorId: string;
     creatorName: string;
+    durationAmount: number;
+    durationUnit: string;
   };
 
   if (!title?.trim() || !options || options.length < 2) {
     return NextResponse.json({ error: "Title and at least 2 options required" }, { status: 400 });
   }
+
+  const amount = Math.max(1, durationAmount || 1);
+  const unit = UNIT_MS[durationUnit] || UNIT_MS.days;
+  const now = Date.now();
 
   const id = Math.random().toString(36).substring(2, 10);
   const poll: Poll = {
@@ -70,11 +91,12 @@ export async function POST(req: NextRequest) {
     voters: new Set(),
     creatorId: creatorId || "anonymous",
     creatorName: (creatorName || "Anonymous").trim(),
-    createdAt: Date.now(),
+    createdAt: now,
+    expiresAt: now + amount * unit,
   };
 
   polls.set(id, poll);
-  return NextResponse.json({ ...sanitize(poll), hasVoted: false, isCreator: true });
+  return NextResponse.json({ ...sanitize(poll), hasVoted: false, isCreator: true, expired: false });
 }
 
 export async function PUT(req: NextRequest) {
@@ -87,6 +109,11 @@ export async function PUT(req: NextRequest) {
 
   const poll = polls.get(pollId);
   if (!poll) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (isExpired(poll)) {
+    return NextResponse.json({ error: "This poll has expired" }, { status: 403 });
+  }
+
   if (optionIndex < 0 || optionIndex >= poll.options.length) {
     return NextResponse.json({ error: "Invalid option" }, { status: 400 });
   }
@@ -102,6 +129,7 @@ export async function PUT(req: NextRequest) {
     ...sanitize(poll),
     hasVoted: true,
     isCreator: poll.creatorId === visitorId,
+    expired: false,
   });
 }
 
