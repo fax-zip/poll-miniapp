@@ -14,6 +14,8 @@ interface Poll {
   options: PollOption[];
   totalVoters: number;
   hasVoted: boolean;
+  isCreator: boolean;
+  creatorName: string;
   createdAt: number;
 }
 
@@ -29,12 +31,24 @@ function getVisitorId(): string {
   return id;
 }
 
+function getCreatorName(): string {
+  if (typeof window === "undefined") return "Anonymous";
+  return localStorage.getItem("poll-creator-name") || "Anonymous";
+}
+
+function setCreatorNameStorage(name: string) {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("poll-creator-name", name);
+  }
+}
+
 export default function PollApp() {
   const [view, setView] = useState<View>("list");
   const [polls, setPolls] = useState<Poll[]>([]);
   const [activePoll, setActivePoll] = useState<Poll | null>(null);
   const [title, setTitle] = useState("");
   const [options, setOptions] = useState(["", ""]);
+  const [creatorName, setCreatorName] = useState("");
   const [visitorId, setVisitorId] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -42,6 +56,7 @@ export default function PollApp() {
 
   useEffect(() => {
     setVisitorId(getVisitorId());
+    setCreatorName(getCreatorName());
     sdk.actions.ready();
     loadPolls();
   }, []);
@@ -65,11 +80,19 @@ export default function PollApp() {
     const validOptions = options.filter((o) => o.trim());
     if (!title.trim() || validOptions.length < 2) return;
 
+    const name = creatorName.trim() || "Anonymous";
+    setCreatorNameStorage(name);
+
     setLoading(true);
     const res = await fetch("/api/polls", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, options: validOptions }),
+      body: JSON.stringify({
+        title,
+        options: validOptions,
+        creatorId: visitorId,
+        creatorName: name,
+      }),
     });
     const poll = await res.json();
     setActivePoll(poll);
@@ -103,6 +126,19 @@ export default function PollApp() {
     setSubmitting(false);
   };
 
+  const deletePoll = async (pollId: string) => {
+    const res = await fetch("/api/polls", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pollId, visitorId }),
+    });
+    if (res.ok) {
+      setActivePoll(null);
+      setView("list");
+      loadPolls();
+    }
+  };
+
   const addOption = () => setOptions([...options, ""]);
 
   const removeOption = (i: number) => {
@@ -119,7 +155,7 @@ export default function PollApp() {
   // --- List View ---
   if (view === "list") {
     return (
-      <div className="min-h-screen bg-white px-5 py-6 max-w-md mx-auto">
+      <div className="min-h-screen bg-white px-5 py-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-lg font-semibold text-black">Polls</h1>
           <button
@@ -139,24 +175,38 @@ export default function PollApp() {
             {polls.map((poll) => {
               const total = poll.options.reduce((s, o) => s + o.votes, 0);
               return (
-                <button
+                <div
                   key={poll.id}
-                  onClick={() => {
-                    loadPoll(poll.id);
-                    setView("vote");
-                  }}
                   className="w-full text-left p-3 border border-gray-100 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors"
                 >
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-black">{poll.title}</p>
-                    {poll.hasVoted && (
-                      <span className="text-xs text-gray-300 ml-2 shrink-0">Voted</span>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {total} vote{total !== 1 ? "s" : ""} &middot; {poll.options.length} options
-                  </p>
-                </button>
+                  <button
+                    onClick={() => {
+                      loadPoll(poll.id);
+                      setView("vote");
+                    }}
+                    className="w-full text-left"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-black">{poll.title}</p>
+                      {poll.hasVoted && (
+                        <span className="text-xs text-gray-300 ml-2 shrink-0">Voted</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      by {poll.creatorName} &middot; {total} vote{total !== 1 ? "s" : ""} &middot; {poll.options.length} options
+                    </p>
+                  </button>
+                  {poll.isCreator && (
+                    <div className="flex justify-end mt-2">
+                      <button
+                        onClick={() => deletePoll(poll.id)}
+                        className="text-xs text-gray-300 hover:text-red-500 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -168,7 +218,7 @@ export default function PollApp() {
   // --- Create View ---
   if (view === "create") {
     return (
-      <div className="min-h-screen bg-white px-5 py-6 max-w-md mx-auto">
+      <div className="min-h-screen bg-white px-5 py-6">
         <div className="flex items-center justify-between mb-6">
           <button
             onClick={() => setView("list")}
@@ -181,6 +231,19 @@ export default function PollApp() {
         </div>
 
         <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+              Your Name
+            </label>
+            <input
+              type="text"
+              value={creatorName}
+              onChange={(e) => setCreatorName(e.target.value)}
+              placeholder="Anonymous"
+              className="w-full mt-1 p-3 border border-gray-200 rounded-lg text-sm text-black placeholder-gray-300 focus:outline-none focus:border-gray-400 transition-colors"
+            />
+          </div>
+
           <div>
             <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">
               Question
@@ -245,7 +308,7 @@ export default function PollApp() {
 
   // --- Vote / Results View ---
   return (
-    <div className="min-h-screen bg-white px-5 py-6 max-w-md mx-auto">
+    <div className="min-h-screen bg-white px-5 py-6">
       <div className="flex items-center justify-between mb-6">
         <button
           onClick={() => {
@@ -258,14 +321,24 @@ export default function PollApp() {
         >
           &larr; Back
         </button>
-        <div className="w-10" />
+        {activePoll?.isCreator && (
+          <button
+            onClick={() => deletePoll(activePoll.id)}
+            className="text-sm text-gray-300 hover:text-red-500 transition-colors"
+          >
+            Delete
+          </button>
+        )}
       </div>
 
       {activePoll ? (
         <div>
-          <h2 className="text-base font-semibold text-black mb-4">
+          <h2 className="text-base font-semibold text-black mb-1">
             {activePoll.title}
           </h2>
+          <p className="text-xs text-gray-400 mb-4">
+            by {activePoll.creatorName}
+          </p>
 
           {hasVoted ? (
             /* --- Results (already voted, locked in) --- */

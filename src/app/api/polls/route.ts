@@ -4,19 +4,22 @@ export interface Poll {
   id: string;
   title: string;
   options: { text: string; votes: number }[];
-  voters: Set<string>; // set of visitorIds who have voted (no record of what they picked)
+  voters: Set<string>;
+  creatorId: string;
+  creatorName: string;
   createdAt: number;
 }
 
 const polls = new Map<string, Poll>();
 
-// Strip voters from response — votes are anonymous
 function sanitize(poll: Poll) {
   return {
     id: poll.id,
     title: poll.title,
     options: poll.options,
     totalVoters: poll.voters.size,
+    creatorId: poll.creatorId,
+    creatorName: poll.creatorName,
     createdAt: poll.createdAt,
   };
 }
@@ -31,6 +34,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ...sanitize(poll),
       hasVoted: visitorId ? poll.voters.has(visitorId) : false,
+      isCreator: visitorId ? poll.creatorId === visitorId : false,
     });
   }
 
@@ -39,6 +43,7 @@ export async function GET(req: NextRequest) {
     .map((poll) => ({
       ...sanitize(poll),
       hasVoted: visitorId ? poll.voters.has(visitorId) : false,
+      isCreator: visitorId ? poll.creatorId === visitorId : false,
     }));
 
   return NextResponse.json(list);
@@ -46,7 +51,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { title, options } = body as { title: string; options: string[] };
+  const { title, options, creatorId, creatorName } = body as {
+    title: string;
+    options: string[];
+    creatorId: string;
+    creatorName: string;
+  };
 
   if (!title?.trim() || !options || options.length < 2) {
     return NextResponse.json({ error: "Title and at least 2 options required" }, { status: 400 });
@@ -58,11 +68,13 @@ export async function POST(req: NextRequest) {
     title: title.trim(),
     options: options.filter((o: string) => o.trim()).map((o: string) => ({ text: o.trim(), votes: 0 })),
     voters: new Set(),
+    creatorId: creatorId || "anonymous",
+    creatorName: (creatorName || "Anonymous").trim(),
     createdAt: Date.now(),
   };
 
   polls.set(id, poll);
-  return NextResponse.json({ ...sanitize(poll), hasVoted: false });
+  return NextResponse.json({ ...sanitize(poll), hasVoted: false, isCreator: true });
 }
 
 export async function PUT(req: NextRequest) {
@@ -79,7 +91,6 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Invalid option" }, { status: 400 });
   }
 
-  // Block re-votes — once you vote, it's final
   if (poll.voters.has(visitorId)) {
     return NextResponse.json({ error: "You have already voted" }, { status: 403 });
   }
@@ -87,5 +98,26 @@ export async function PUT(req: NextRequest) {
   poll.options[optionIndex].votes++;
   poll.voters.add(visitorId);
 
-  return NextResponse.json({ ...sanitize(poll), hasVoted: true });
+  return NextResponse.json({
+    ...sanitize(poll),
+    hasVoted: true,
+    isCreator: poll.creatorId === visitorId,
+  });
+}
+
+export async function DELETE(req: NextRequest) {
+  const { pollId, visitorId } = (await req.json()) as {
+    pollId: string;
+    visitorId: string;
+  };
+
+  const poll = polls.get(pollId);
+  if (!poll) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (poll.creatorId !== visitorId) {
+    return NextResponse.json({ error: "Only the creator can delete this poll" }, { status: 403 });
+  }
+
+  polls.delete(pollId);
+  return NextResponse.json({ success: true });
 }
