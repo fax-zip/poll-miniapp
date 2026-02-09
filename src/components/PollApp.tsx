@@ -31,33 +31,47 @@ function getVisitorId(): string {
   return id;
 }
 
-function getCreatorName(): string {
-  if (typeof window === "undefined") return "Anonymous";
-  return localStorage.getItem("poll-creator-name") || "Anonymous";
-}
-
-function setCreatorNameStorage(name: string) {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("poll-creator-name", name);
-  }
-}
-
 export default function PollApp() {
   const [view, setView] = useState<View>("list");
   const [polls, setPolls] = useState<Poll[]>([]);
   const [activePoll, setActivePoll] = useState<Poll | null>(null);
   const [title, setTitle] = useState("");
   const [options, setOptions] = useState(["", ""]);
-  const [creatorName, setCreatorName] = useState("");
   const [visitorId, setVisitorId] = useState("");
+  const [userName, setUserName] = useState("Anonymous");
   const [loading, setLoading] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     setVisitorId(getVisitorId());
-    setCreatorName(getCreatorName());
-    sdk.actions.ready();
+
+    const init = async () => {
+      try {
+        const context = await sdk.context;
+        if (context?.user) {
+          const user = context.user;
+          // Prefer @username, fall back to displayName, then "Anonymous"
+          const name = user.username
+            ? `@${user.username}`
+            : user.displayName || "Anonymous";
+          setUserName(name);
+
+          // Use FID as the visitor ID if available (more reliable than random)
+          if (user.fid) {
+            const fid = String(user.fid);
+            localStorage.setItem("poll-visitor-id", fid);
+            setVisitorId(fid);
+          }
+        }
+      } catch {
+        // Not in a Farcaster context, use defaults
+      }
+
+      await sdk.actions.ready();
+    };
+
+    init();
     loadPolls();
   }, []);
 
@@ -80,9 +94,6 @@ export default function PollApp() {
     const validOptions = options.filter((o) => o.trim());
     if (!title.trim() || validOptions.length < 2) return;
 
-    const name = creatorName.trim() || "Anonymous";
-    setCreatorNameStorage(name);
-
     setLoading(true);
     const res = await fetch("/api/polls", {
       method: "POST",
@@ -91,7 +102,7 @@ export default function PollApp() {
         title,
         options: validOptions,
         creatorId: visitorId,
-        creatorName: name,
+        creatorName: userName,
       }),
     });
     const poll = await res.json();
@@ -193,7 +204,7 @@ export default function PollApp() {
                       )}
                     </div>
                     <p className="text-xs text-gray-400 mt-1">
-                      by {poll.creatorName} &middot; {total} vote{total !== 1 ? "s" : ""} &middot; {poll.options.length} options
+                      {poll.creatorName} &middot; {total} vote{total !== 1 ? "s" : ""} &middot; {poll.options.length} options
                     </p>
                   </button>
                   {poll.isCreator && (
@@ -230,20 +241,11 @@ export default function PollApp() {
           <div className="w-10" />
         </div>
 
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-              Your Name
-            </label>
-            <input
-              type="text"
-              value={creatorName}
-              onChange={(e) => setCreatorName(e.target.value)}
-              placeholder="Anonymous"
-              className="w-full mt-1 p-3 border border-gray-200 rounded-lg text-sm text-black placeholder-gray-300 focus:outline-none focus:border-gray-400 transition-colors"
-            />
-          </div>
+        <p className="text-xs text-gray-400 mb-4">
+          Posting as {userName}
+        </p>
 
+        <div className="space-y-4">
           <div>
             <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">
               Question
@@ -337,7 +339,7 @@ export default function PollApp() {
             {activePoll.title}
           </h2>
           <p className="text-xs text-gray-400 mb-4">
-            by {activePoll.creatorName}
+            {activePoll.creatorName}
           </p>
 
           {hasVoted ? (
