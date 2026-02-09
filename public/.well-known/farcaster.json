@@ -7,8 +7,8 @@
   "miniapp": {
     "version": "1",
     "name": "Poll",
-    "homeUrl": "https://your-domain.com",
-    "iconUrl": "https://your-domain.com/icon.png",
+    "homeUrl": "https://poll-miniapp-five.vercel.app",
+    "iconUrl": "https://poll-miniapp-five.vercel.app/icon.png",
     "splashBackgroundColor": "#ffffff",
     "subtitle": "Create & vote on polls",
     "description": "A simple polling miniapp for Farcaster"
