@@ -69,11 +69,10 @@ export default function PollApp({ initialPollId }: { initialPollId?: string } = 
             setVisitorId(fid);
           }
         }
+        await sdk.actions.ready();
       } catch {
         // Not in a Farcaster context, use defaults
       }
-
-      await sdk.actions.ready();
     };
 
     init();
