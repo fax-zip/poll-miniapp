@@ -329,19 +329,19 @@ export default function PollApp({ initialPollId }: { initialPollId?: string } = 
             </label>
             <div className="flex gap-2 mt-1 justify-center">
               {/* Amount selector */}
-              <div className="flex border border-gray-300 rounded-lg overflow-hidden">
-                <div className="flex flex-col border-r border-gray-200">
+              <div className="flex border border-gray-300 rounded-lg overflow-hidden h-10">
+                <div className="flex flex-col border-r border-gray-200 w-7">
                   <button
                     onClick={() => setDurationAmount(durationAmount + 1)}
-                    className="px-2 py-1 text-gray-400 hover:text-black hover:bg-gray-100 transition-colors flex items-center justify-center border-b border-gray-200"
+                    className="flex-1 text-gray-400 hover:text-black hover:bg-gray-100 transition-colors flex items-center justify-center border-b border-gray-200"
                   >
-                    <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M5 0L10 6H0L5 0Z"/></svg>
+                    <svg width="8" height="5" viewBox="0 0 8 5" fill="currentColor"><path d="M4 0L8 5H0L4 0Z"/></svg>
                   </button>
                   <button
                     onClick={() => setDurationAmount(Math.max(1, durationAmount - 1))}
-                    className="px-2 py-1 text-gray-400 hover:text-black hover:bg-gray-100 transition-colors flex items-center justify-center"
+                    className="flex-1 text-gray-400 hover:text-black hover:bg-gray-100 transition-colors flex items-center justify-center"
                   >
-                    <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M5 6L0 0H10L5 6Z"/></svg>
+                    <svg width="8" height="5" viewBox="0 0 8 5" fill="currentColor"><path d="M4 5L0 0H8L4 5Z"/></svg>
                   </button>
                 </div>
                 <input
@@ -351,33 +351,33 @@ export default function PollApp({ initialPollId }: { initialPollId?: string } = 
                     const val = parseInt(e.target.value);
                     if (!isNaN(val) && val >= 1) setDurationAmount(val);
                   }}
-                  className="w-9 text-center text-sm text-black py-2 focus:outline-none"
+                  className="w-8 text-center text-sm text-black focus:outline-none"
                 />
               </div>
 
               {/* Unit selector */}
-              <div className="flex border border-gray-300 rounded-lg overflow-hidden">
-                <div className="flex flex-col border-r border-gray-200">
+              <div className="flex border border-gray-300 rounded-lg overflow-hidden h-10">
+                <div className="flex flex-col border-r border-gray-200 w-7">
                   <button
                     onClick={() => {
                       const idx = durationUnits.indexOf(durationUnit);
                       setDurationUnit(durationUnits[(idx + 1) % durationUnits.length]);
                     }}
-                    className="px-2 py-1 text-gray-400 hover:text-black hover:bg-gray-100 transition-colors flex items-center justify-center border-b border-gray-200"
+                    className="flex-1 text-gray-400 hover:text-black hover:bg-gray-100 transition-colors flex items-center justify-center border-b border-gray-200"
                   >
-                    <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M5 0L10 6H0L5 0Z"/></svg>
+                    <svg width="8" height="5" viewBox="0 0 8 5" fill="currentColor"><path d="M4 0L8 5H0L4 0Z"/></svg>
                   </button>
                   <button
                     onClick={() => {
                       const idx = durationUnits.indexOf(durationUnit);
                       setDurationUnit(durationUnits[(idx - 1 + durationUnits.length) % durationUnits.length]);
                     }}
-                    className="px-2 py-1 text-gray-400 hover:text-black hover:bg-gray-100 transition-colors flex items-center justify-center"
+                    className="flex-1 text-gray-400 hover:text-black hover:bg-gray-100 transition-colors flex items-center justify-center"
                   >
-                    <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M5 6L0 0H10L5 6Z"/></svg>
+                    <svg width="8" height="5" viewBox="0 0 8 5" fill="currentColor"><path d="M4 5L0 0H8L4 5Z"/></svg>
                   </button>
                 </div>
-                <span className="px-3 text-center text-sm text-black py-2 flex items-center">
+                <span className="px-2 text-center text-sm text-black flex items-center">
                   {durationUnit}
                 </span>
               </div>
