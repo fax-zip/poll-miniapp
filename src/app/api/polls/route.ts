@@ -1,24 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Redis } from "@upstash/redis";
 
-export interface Poll {
+const redis = Redis.fromEnv();
+
+interface StoredPoll {
   id: string;
   title: string;
   options: { text: string; votes: number }[];
-  voters: Set<string>;
+  voters: string[];
   creatorId: string;
   creatorName: string;
   createdAt: number;
   expiresAt: number;
 }
 
-const polls = new Map<string, Poll>();
-
-function sanitize(poll: Poll) {
+function sanitize(poll: StoredPoll) {
   return {
     id: poll.id,
     title: poll.title,
     options: poll.options,
-    totalVoters: poll.voters.size,
+    totalVoters: poll.voters.length,
     creatorId: poll.creatorId,
     creatorName: poll.creatorName,
     createdAt: poll.createdAt,
@@ -26,33 +27,54 @@ function sanitize(poll: Poll) {
   };
 }
 
-function isExpired(poll: Poll): boolean {
+function isExpired(poll: StoredPoll): boolean {
   return Date.now() > poll.expiresAt;
 }
 
+async function getPoll(id: string): Promise<StoredPoll | null> {
+  const data = await redis.get<StoredPoll>(`poll:${id}`);
+  return data || null;
+}
+
+async function savePoll(poll: StoredPoll) {
+  // Store the poll with a TTL based on expiration + 30 days buffer
+  const ttlMs = poll.expiresAt - Date.now() + 30 * 24 * 60 * 60 * 1000;
+  const ttlSeconds = Math.max(Math.ceil(ttlMs / 1000), 3600);
+  await redis.set(`poll:${poll.id}`, poll, { ex: ttlSeconds });
+  // Add to the sorted set for listing (scored by createdAt)
+  await redis.zadd("polls:index", { score: poll.createdAt, member: poll.id });
+}
+
 export async function GET(req: NextRequest) {
-  const id = req.nextUrl.searchParams.get("id");
+  const pollId = req.nextUrl.searchParams.get("id");
   const visitorId = req.nextUrl.searchParams.get("visitorId");
 
-  if (id) {
-    const poll = polls.get(id);
+  if (pollId) {
+    const poll = await getPoll(pollId);
     if (!poll) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({
       ...sanitize(poll),
-      hasVoted: visitorId ? poll.voters.has(visitorId) : false,
+      hasVoted: visitorId ? poll.voters.includes(visitorId) : false,
       isCreator: visitorId ? poll.creatorId === visitorId : false,
       expired: isExpired(poll),
     });
   }
 
-  const list = Array.from(polls.values())
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .map((poll) => ({
-      ...sanitize(poll),
-      hasVoted: visitorId ? poll.voters.has(visitorId) : false,
-      isCreator: visitorId ? poll.creatorId === visitorId : false,
-      expired: isExpired(poll),
-    }));
+  // Get all poll IDs from the sorted set (newest first)
+  const pollIds = await redis.zrange("polls:index", 0, -1, { rev: true }) as string[];
+
+  const list: ReturnType<typeof sanitize>[] = [];
+  for (const pid of pollIds) {
+    const poll = await getPoll(pid);
+    if (poll) {
+      list.push({
+        ...sanitize(poll),
+        hasVoted: visitorId ? poll.voters.includes(visitorId) : false,
+        isCreator: visitorId ? poll.creatorId === visitorId : false,
+        expired: isExpired(poll),
+      } as ReturnType<typeof sanitize> & { hasVoted: boolean; isCreator: boolean; expired: boolean });
+    }
+  }
 
   return NextResponse.json(list);
 }
@@ -83,19 +105,19 @@ export async function POST(req: NextRequest) {
   const unit = UNIT_MS[durationUnit] || UNIT_MS.days;
   const now = Date.now();
 
-  const id = Math.random().toString(36).substring(2, 10);
-  const poll: Poll = {
-    id,
+  const pollId = Math.random().toString(36).substring(2, 10);
+  const poll: StoredPoll = {
+    id: pollId,
     title: title.trim(),
     options: options.filter((o: string) => o.trim()).map((o: string) => ({ text: o.trim(), votes: 0 })),
-    voters: new Set(),
+    voters: [],
     creatorId: creatorId || "anonymous",
     creatorName: (creatorName || "Anonymous").trim(),
     createdAt: now,
     expiresAt: now + amount * unit,
   };
 
-  polls.set(id, poll);
+  await savePoll(poll);
   return NextResponse.json({ ...sanitize(poll), hasVoted: false, isCreator: true, expired: false });
 }
 
@@ -107,7 +129,7 @@ export async function PUT(req: NextRequest) {
     visitorId: string;
   };
 
-  const poll = polls.get(pollId);
+  const poll = await getPoll(pollId);
   if (!poll) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   if (isExpired(poll)) {
@@ -118,12 +140,13 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Invalid option" }, { status: 400 });
   }
 
-  if (poll.voters.has(visitorId)) {
+  if (poll.voters.includes(visitorId)) {
     return NextResponse.json({ error: "You have already voted" }, { status: 403 });
   }
 
   poll.options[optionIndex].votes++;
-  poll.voters.add(visitorId);
+  poll.voters.push(visitorId);
+  await savePoll(poll);
 
   return NextResponse.json({
     ...sanitize(poll),
@@ -139,13 +162,14 @@ export async function DELETE(req: NextRequest) {
     visitorId: string;
   };
 
-  const poll = polls.get(pollId);
+  const poll = await getPoll(pollId);
   if (!poll) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   if (poll.creatorId !== visitorId) {
     return NextResponse.json({ error: "Only the creator can delete this poll" }, { status: 403 });
   }
 
-  polls.delete(pollId);
+  await redis.del(`poll:${pollId}`);
+  await redis.zrem("polls:index", pollId);
   return NextResponse.json({ success: true });
 }
