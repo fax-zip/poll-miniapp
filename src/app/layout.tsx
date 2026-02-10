@@ -10,10 +10,15 @@ const geistSans = Geist({
 export const metadata: Metadata = {
   title: "poll",
   description: "Create and vote on polls",
+  openGraph: {
+    title: "poll",
+    description: "Create and vote on polls",
+    images: ["https://poll-miniapp-five.vercel.app/image.png"],
+  },
   other: {
     "fc:miniapp": JSON.stringify({
       version: "1",
-      imageUrl: "https://placehold.co/1200x800/ffffff/000000?text=Poll",
+      imageUrl: "https://poll-miniapp-five.vercel.app/image.png",
       button: {
         title: "Open Poll",
         action: {
